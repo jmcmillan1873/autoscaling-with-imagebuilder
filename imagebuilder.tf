@@ -21,11 +21,21 @@ resource "aws_imagebuilder_component" "os_tooling" {
 # Create the recipe for the custom image using the components listed abouve
 resource "aws_imagebuilder_image_recipe" "custom_recipe" {
   name         = "al2023-custom-recipe"
-  version      = "1.0.0"
+  version      = "1.0.4"
   parent_image = data.aws_ssm_parameter.al2023.value
 
   component { component_arn = aws_imagebuilder_component.os_tooling.arn }
   component { component_arn = aws_imagebuilder_component.custom_scripts.arn }
+
+  block_device_mapping {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_type           = "gp3"
+      volume_size           = 20
+      encrypted             = true
+      delete_on_termination = true
+    }
+  }
 
   lifecycle {
     create_before_destroy = true

@@ -1,17 +1,39 @@
 # AWS Autoscaling with EC2 Image Builder
 
+[![Terraform](https://img.shields.io/badge/Terraform-1.11+-blue.svg)](https://www.terraform.io/)
+[![AWS](https://img.shields.io/badge/AWS-Multiple%20Services-orange.svg)](https://aws.amazon.com/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+> **An educational infrastructure project demonstrating event-driven autoscaling patterns using EC2 Image Builder, Lambda automation, and EventBridge integration.**
+
+This project showcases modern AWS infrastructure automation patterns through a fully automated AMI lifecycle management system. Learn how to build event-driven architectures that eliminate manual operations while maintaining security and cost efficiency.
+
+
 ## Table of Contents
-- [Learning Objectives](#learning-objectives)
-- [Architecture Overview](#architecture-overview)
-- [AWS Services Used](#aws-services-used)
-- [How It Works](#how-it-works)
-- [Prerequisites](#prerequisites)
-- [Deployment Instructions](#deployment-instructions)
-- [File Structure & Purpose](#file-structure--purpose)
-- [Customization Options](#customization-options)
-- [Best Practices](#best-practices)
-- [Troubleshooting](#troubleshooting)
-- [Additional Resources](#additional-resources)
+
+### Getting Started
+- [Learning Objectives](#learning-objectives) - What you'll learn from this project
+- [Architecture Overview](#architecture-overview) - High-level system design
+- [Prerequisites](#prerequisites) - Required tools and permissions
+- [Deployment Instructions](#deployment-instructions) - Step-by-step deployment guide
+
+### Understanding the Architecture
+- [AWS Services Used](#aws-services-used) - Detailed service explanations
+- [How It Works](#how-it-works) - Complete workflow walkthrough
+- [File Structure & Purpose](#file-structure--purpose) - Terraform file documentation
+- [Event-Driven Automation Workflow](#event-driven-automation-workflow) - Technical deep dive
+
+
+### Resources & References
+- [Additional Resources](#additional-resources) - Documentation and learning materials
+  - [AWS Documentation](#aws-documentation)
+  - [Best Practices Guides](#best-practices-guides)
+  - [Terraform Resources](#terraform-resources)
+  - [Tools and Utilities](#tools-and-utilities)
+
+---
+
+> **Quick Start**: New to this project? Start with [Prerequisites](#prerequisites) → [Deployment Instructions](#deployment-instructions) → [Verification](#step-6-verify-deployment)
 
 ## Learning Objectives
 
@@ -19,7 +41,7 @@ By exploring and deploying this project, you will learn:
 
 ### Infrastructure Automation Concepts
 - **Event-Driven Architecture**: Understand how AWS services communicate through EventBridge to create automated workflows
-- **Infrastructure as Code**: Master Terraform patterns for complex, multi-service AWS deployments
+- **Infrastructure as Code**: Gain experience of Terraform patterns for a simple, multi-service AWS deployment
 - **Immutable Infrastructure**: Learn the benefits and implementation of treating infrastructure as disposable and reproducible
 
 ### AWS Service Integration Patterns
@@ -141,6 +163,7 @@ This architecture leverages multiple AWS services working together to create a f
 ### Security & Networking Infrastructure
 
 #### **[Virtual Private Cloud (VPC)](https://docs.aws.amazon.com/vpc/)**
+
 - **Role**: Isolated network environment for all resources
 - **Architecture**: 
   - **CIDR Block**: 11.0.0.0/16 (private address space)
@@ -148,6 +171,7 @@ This architecture leverages multiple AWS services working together to create a f
   - **Public Subnets**: 11.0.1.0/24, 11.0.2.0/24 (for NAT Gateway)
   - **Private Subnets**: 11.0.101.0/24, 11.0.102.0/24 (for compute resources)
 - **Connectivity**: Single NAT Gateway for outbound internet access from private subnets
+- **Improvement Idea**: The focus of this lab is not on VPC customisation, hence the simple approach to VPC setup here. For better control over VPC customisation, and greater reusability, consider replacing statically defined values with variables.
 
 #### **[Security Groups](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-security-groups.html)**
 - **Role**: Network-level access control and traffic filtering
@@ -167,12 +191,14 @@ This architecture leverages multiple AWS services working together to create a f
 ### Supporting Services
 
 #### **[Elastic Block Store (EBS)](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AmazonEBS.html)**
+
 - **Role**: Encrypted storage for EC2 instances
 - **Configuration**: 20GB GP3 volumes with encryption at rest
 - **Integration**: Configured in launch template for consistent storage setup
+- **Improvement Idea**: This lab utilises default EBS encryption. In a real world scenario, consider using [AWS Key Management Service - Customer Managed Keys (KMS CMK)](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html). KMS CMK allows you to control the key policy, who can decrypt/encrypt using that key etc - which allows for better and more fine grained access control to encrypted volumes than the default key, but costs a small amount more. This will become mandatory if you want to share AMI's across Regions or AWS Accounts.
 
 #### **[CloudWatch](https://docs.aws.amazon.com/cloudwatch/)**
-- **Role**: Monitoring and logging for pipeline visibility
+- **Role**: Configuring rules for EventBridge
 - **Integration**: EventBridge rules use CloudWatch Events for state change detection
 - **Observability**: Provides logs and metrics for troubleshooting automation workflows
 
@@ -183,9 +209,23 @@ This section provides a detailed walkthrough of the event-driven automation work
 ### 1. Scheduled AMI Creation Pipeline
 
 #### **Pipeline Initialization**
+```hcl
+resource "aws_imagebuilder_image_pipeline" "pipeline" {
+  name                             = "${var.project}-pipeline"
+  status                           = "ENABLED"
+  enhanced_image_metadata_enabled  = true
+
+  schedule {
+    schedule_expression                = "cron(0 2 ? * TUE *)"
+    pipeline_execution_start_condition = "EXPRESSION_MATCH_ONLY"
+  }
+}
+```
+
 - **EventBridge Schedule**: Triggers the Image Builder pipeline weekly (Tuesdays at 02:00 UTC)
 - **Schedule Expression**: `cron(0 2 ? * TUE *)` ensures consistent, predictable builds
 - **Pipeline Status**: Enabled with enhanced metadata collection for detailed tracking
+- **Execution Condition**: `EXPRESSION_MATCH_ONLY` prevents manual triggers from interfering with scheduled builds
 
 #### **Image Building Process**
 1. **Infrastructure Provisioning**: Image Builder launches a temporary EC2 instance in the private subnet
@@ -240,9 +280,18 @@ The Lambda function performs the following operations:
 ### 3. Automatic Instance Lifecycle Management
 
 #### **Auto Scaling Group Integration**
-- **Launch Template Reference**: ASG always uses the `$Latest` version of the launch template
-- **Immediate Effect**: New instances automatically use the updated AMI without manual intervention
-- **Multi-AZ Deployment**: Instances can be launched across multiple availability zones for resilience
+```hcl
+launch_template {
+  id      = aws_launch_template.custom_lt.id
+  version = "$Latest"
+}
+```
+
+- **Dynamic Version Reference**: ASG configured with `$Latest` ensures automatic adoption of new launch template versions
+- **Zero-Configuration Updates**: No ASG modification required when Lambda updates launch template default version
+- **Immediate Effect**: New scaling events automatically use the updated AMI without manual intervention
+- **Multi-AZ Deployment**: Instances launched across private subnets in multiple availability zones for resilience
+- **Consistent Configuration**: All instances maintain identical security groups, IAM profiles, and EBS encryption settings
 
 #### **Instance Refresh Capabilities**
 - **Manual Refresh**: Existing instances can be refreshed using ASG instance refresh features
@@ -294,6 +343,377 @@ The Lambda function performs the following operations:
 - **Infrastructure as Code**: Complete automation enables version control and reproducible deployments
 
 This comprehensive automation pattern eliminates manual AMI management while ensuring your infrastructure remains current with security patches and organizational standards.
+
+## Prerequisites
+
+Before deploying this infrastructure, ensure you have the following tools and permissions configured:
+
+### Required Tools and Versions
+
+#### **Terraform**
+- **Version**: >= 1.11.0 (as specified in `main.tf`)
+- **Installation**: Download from [terraform.io](https://www.terraform.io/downloads.html)
+- **Verification**: Run `terraform version` to confirm installation
+
+#### **AWS CLI**
+- **Version**: >= 2.0 (recommended for latest features)
+- **Installation**: Follow [AWS CLI installation guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+- **Configuration**: Run `aws configure` to set up credentials and default region
+
+#### **Git** (Optional but Recommended)
+- **Purpose**: Version control and project cloning
+- **Installation**: Download from [git-scm.com](https://git-scm.com/downloads)
+
+### AWS Account Requirements
+
+#### **AWS Account Access**
+- **Administrative Privileges**: Required for creating IAM roles, VPC resources, and AWS services
+- **Account Limits**: Ensure sufficient service limits for:
+  - VPC (1 additional VPC)
+  - EC2 instances (for Image Builder and Auto Scaling)
+  - Lambda functions (1 function)
+  - EventBridge rules (2 rules)
+
+#### **AWS Credentials Configuration**
+Choose one of the following authentication methods:
+
+**Option 1: AWS CLI Profiles**
+```bash
+aws configure --profile your-profile-name
+# Enter: Access Key ID, Secret Access Key, Default region, Output format
+```
+
+**Option 2: Environment Variables**
+```bash
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export AWS_DEFAULT_REGION="eu-west-1"
+```
+
+**Option 3: IAM Roles (for EC2/Lambda execution)**
+- Attach appropriate IAM role to your execution environment
+- Ensure role has necessary permissions listed below
+
+#### **Required AWS Permissions**
+Your AWS credentials must have permissions for the following services:
+- **EC2**: Full access for instances, launch templates, Auto Scaling Groups
+- **VPC**: Full access for VPC, subnets, security groups, NAT Gateway
+- **IAM**: Create and manage roles, policies, and instance profiles
+- **Image Builder**: Full access for pipelines, recipes, components
+- **Lambda**: Create and manage functions, permissions
+- **EventBridge**: Create and manage rules, targets
+- **Systems Manager**: Parameter Store read/write access
+- **CloudWatch**: Logs and events access
+
+**Minimum IAM Policy Example:**
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:*",
+        "iam:*",
+        "imagebuilder:*",
+        "lambda:*",
+        "events:*",
+        "ssm:*",
+        "logs:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+### Regional Considerations
+
+#### **Supported Regions**
+- **Default Region**: eu-west-1 (Ireland)
+- **Alternative Regions**: Any AWS region supporting all required services
+- **Service Availability**: Verify that EC2 Image Builder is available in your chosen region
+
+#### **Graviton Instance Support**
+- **Instance Types**: t4g family (ARM64 architecture)
+- **Regional Availability**: Ensure Graviton instances are available in your deployment region
+- **Alternative**: Modify `build_instance_types` variable for x86 instances if needed
+
+### Network Requirements
+
+#### **Internet Connectivity**
+- **Outbound HTTPS**: Required for downloading packages and AWS API calls
+- **NAT Gateway**: Automatically provisioned for private subnet internet access
+- **No Inbound Access**: Architecture doesn't require inbound internet connectivity
+
+#### **IP Address Planning**
+- **VPC CIDR**: 11.0.0.0/16 (default, configurable)
+- **Subnet Allocation**: 
+  - Public: 11.0.1.0/24, 11.0.2.0/24
+  - Private: 11.0.101.0/24, 11.0.102.0/24
+- **Conflict Check**: Ensure CIDR doesn't conflict with existing VPCs
+
+### Cost Considerations
+
+#### **Estimated Monthly Costs** (eu-west-1 region)
+- **VPC Components**: ~$45/month (NAT Gateway primary cost)
+- **EC2 Instances**: Variable based on Auto Scaling Group usage
+- **Image Builder**: ~$2-5/month (weekly builds, t4g.small instances)
+- **Lambda**: <$1/month (minimal execution time)
+- **Other Services**: <$5/month (EventBridge, Parameter Store, CloudWatch)
+
+**Total Estimated Cost**: $50-60/month for development/testing workloads (or $1-2/day whilst testing)
+
+#### **Cost Optimization Tips**
+- **Clean up**: Most importantly - Delete the resources for the lab when you've finished to stop costs accumulating. 
+- **Instance Types**: t4g.small provides good balance of cost and performance
+- **Build Frequency**: Weekly builds balance security with cost
+- **Auto Scaling**: Set appropriate min/max values for your workload
+
+## Deployment Instructions
+
+Follow these step-by-step instructions to deploy the autoscaling with Image Builder infrastructure:
+
+### Step 1: Project Setup
+
+#### **Clone or Download Project**
+```bash
+# Clone from repository (if available)
+git clone https://github.com/jmcmillan1873/autoscaling-with-imagebuilder.git
+cd autoscaling-with-imagebuilder
+```
+
+#### **Verify Project Structure**
+Confirm you have all required files:
+```bash
+ls -la *.tf
+# Expected files:
+# main.tf, variables.tf, data.tf, locals.tf
+# vpc.tf, security-group.tf, iam.tf
+# imagebuilder.tf, lambda.tf, eventbridge.tf
+# ec2-asg.tf, ssm.tf
+```
+
+### Step 2: Configure Variables
+
+#### **Create terraform.tfvars File**
+Create a `terraform.tfvars` file to customize your deployment:
+
+```hcl
+# terraform.tfvars
+region       = "eu-west-1"  # Change to your preferred region
+project      = "MyAutoscalingProject"  # Customize project name
+instance_type = "t4g.small"  # Adjust instance size as needed
+
+# Customize default tags
+default_tags = {
+  Owner       = "YourName"
+  Project     = "MyAutoscalingProject"
+  Environment = "Development"  # or "Production", "Staging"
+}
+
+# Optional: Customize build instance types
+build_instance_types = ["t4g.small", "t4g.medium"]
+```
+
+#### **Variable Configuration Options**
+
+**Region Selection:**
+- Select the region you'd like to deploy to. 
+- Defaults to `eu-west-1`
+
+**Instance Type Selection:**
+- The lab uses the Graviton t4g family. Feel free to change this, but make correct the code to accomodate (hint - look for `arm64` and change that to your preferred architecture type)
+
+**Project Naming:**
+- Use alphanumeric characters and hyphens only
+- Keep under 20 characters for resource name limits
+- Choose descriptive names for easy identification
+
+### Step 3: Initialize Terraform
+
+#### **Initialize Terraform Backend**
+```bash
+terraform init
+```
+
+**Expected Output:**
+```
+Initializing the backend...
+Initializing provider plugins...
+- Finding hashicorp/aws versions matching "6.13.0"...
+- Installing hashicorp/aws v6.13.0...
+Terraform has been successfully initialized!
+```
+
+#### **Validate Configuration**
+```bash
+terraform validate
+```
+
+**Expected Output:**
+```
+Success! The configuration is valid.
+```
+
+### Step 4: Plan Deployment
+
+#### **Review Deployment Plan**
+```bash
+terraform plan
+```
+
+### Step 5: Deploy Infrastructure
+
+#### **Apply Terraform Configuration**
+```bash
+terraform apply
+```
+
+**Deployment Process:**
+1. **Review Plan**: Terraform shows resources to be created
+2. **Confirm Deployment**: Type `yes` when prompted
+3. **Monitor Progress**: Watch resource creation (typically 5-10 minutes)
+4. **Completion**: Note the outputs displayed at the end
+
+**Expected Deployment Time:** 8-12 minutes
+
+#### **Monitor Deployment Progress**
+During deployment, you can monitor progress in the AWS Console:
+- **VPC Console**: Watch VPC and subnet creation
+- **EC2 Console**: Monitor security groups and launch template
+- **Image Builder Console**: Verify pipeline creation
+- **Lambda Console**: Confirm function deployment
+
+### Step 6: Verify Deployment
+
+#### **Check Terraform Outputs**
+```bash
+terraform output
+```
+
+**Expected Outputs:**
+- VPC ID and subnet information
+- Security group IDs
+- Launch template ID
+- Auto Scaling Group name
+- Image Builder pipeline ARN
+
+#### **Verify AWS Resources**
+
+**1. VPC and Networking:**
+```bash
+# Check VPC creation
+aws ec2 describe-vpcs --filters "Name=tag:Project,Values=YourProjectName"
+
+# Verify subnets
+aws ec2 describe-subnets --filters "Name=tag:Project,Values=YourProjectName"
+```
+
+**2. Image Builder Pipeline:**
+```bash
+# Check pipeline status
+aws imagebuilder describe-image-pipelines --image-pipeline-arns $(terraform output -raw imagebuilder_pipeline_arn)
+```
+
+**3. Auto Scaling Group:**
+```bash
+# Verify ASG creation
+aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names $(terraform output -raw asg_name)
+```
+
+**4. Lambda Function:**
+```bash
+# Check Lambda function
+aws lambda get-function --function-name $(terraform output -raw lambda_function_name)
+```
+
+#### **Test Initial Functionality**
+
+**1. Trigger Manual Image Build (Optional):**
+```bash
+# Start a manual pipeline execution
+aws imagebuilder start-image-pipeline-execution --image-pipeline-arn $(terraform output -raw imagebuilder_pipeline_arn)
+```
+
+**2. Check Parameter Store:**
+```bash
+# Verify AMI parameter exists
+aws ssm get-parameter --name "/imagebuilder/$(terraform output -raw project_name)/custom_id"
+```
+
+**3. Monitor CloudWatch Logs:**
+```bash
+# Check Lambda function logs (after first execution)
+aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/"
+```
+
+### Step 7: Post-Deployment Configuration
+
+#### **Schedule Verification**
+- **Image Builder Pipeline**: Automatically runs Tuesdays at 02:00 UTC
+- **First Build**: May take 15-20 minutes to complete
+- **EventBridge Rules**: Verify in AWS Console under EventBridge
+
+#### **Security Review**
+- **IAM Roles**: Review created roles and policies
+- **Security Groups**: Verify network access rules
+- **Encryption**: Confirm EBS volumes are encrypted
+
+### Troubleshooting Deployment Issues
+
+#### **Common Issues and Solutions**
+
+**1. Insufficient Permissions:**
+```bash
+# Error: AccessDenied for specific service
+# Solution: Review and update IAM permissions
+aws sts get-caller-identity  # Verify current user/role
+```
+
+**2. Resource Limits:**
+```bash
+# Error: VPC limit exceeded
+# Solution: Request limit increase or use existing VPC
+aws ec2 describe-account-attributes --attribute-names supported-platforms
+```
+
+**3. Region Availability:**
+```bash
+# Error: Service not available in region
+# Solution: Change region or verify service availability
+aws ec2 describe-regions --all-regions
+```
+
+**4. Terraform State Issues:**
+```bash
+# Error: State lock or corruption
+# Solution: Clear state lock or refresh state
+terraform force-unlock <lock-id>  # Use with caution
+terraform refresh
+```
+
+### Next Steps After Deployment
+
+#### **Immediate Actions**
+1. **Monitor First Build**: Watch the first Image Builder execution
+2. **Review Costs**: Check AWS billing dashboard after 24 hours
+3. **Test Scaling**: Manually adjust ASG capacity to test scaling
+
+#### **Customization Opportunities**
+1. **Modify Components**: Update Image Builder components for your needs
+2. **Adjust Scaling**: Configure Auto Scaling policies for your workload
+3. **Add Monitoring**: Implement additional CloudWatch metrics and alarms
+4. **Upgrade Encryption**: Replace default EBS encryption with KMS CMK. 
+5. **Add LifeCycle Policy**: Add a Lifecycle policy to EC2 Image Builder to delete older AMIs. e.g. *Retain the last 5 AMIs.* 
+
+#### **Production Considerations**
+1. **Backup Strategy**: Implement AMI and configuration backups
+2. **Multi-Region**: Extend to multiple regions for disaster recovery (requires KMS CMK)
+3. **Security Hardening**: Add additional security controls and monitoring
+
+This comprehensive deployment guide ensures successful infrastructure deployment while providing troubleshooting guidance and next steps for customization.
+
 ## File Structure & Purpose
 
 This section provides detailed documentation of each Terraform file, explaining their purpose, key resources, and relationships within the overall architecture.
@@ -304,9 +724,9 @@ This section provides detailed documentation of each Terraform file, explaining 
 **Purpose**: Defines Terraform and AWS provider requirements with default tagging strategy
 
 **Key Resources**:
-- **Terraform Block**: Specifies minimum Terraform version (>=1.11.0) and AWS provider version (6.13.0)
+- **Terraform Block**: Specifies minimum Terraform version (>=1.11.0) and AWS provider version (6.0+)
 - **AWS Provider**: Configures regional deployment with automatic default tagging
-- **Default Tags**: Applies consistent tags (Owner, Project, Environment) to all resources
+- **Default Tags**: Demonstrates applying consistent tags (Owner, Project, Environment) to all resources
 
 **Configuration Notes**:
 - Uses variable-driven region configuration for multi-region flexibility
@@ -655,8 +1075,61 @@ schedule {
 - **Timezone**: UTC for consistent global execution regardless of regional settings
 - **Frequency**: Weekly builds balance security currency with resource costs
 
+#### **Complete Automation Flow Sequence**
+```mermaid
+sequenceDiagram
+    participant EB as EventBridge Schedule
+    participant IB as Image Builder Pipeline
+    participant PS as Parameter Store
+    participant EBR as EventBridge Rule
+    participant LF as Lambda Function
+    participant LT as Launch Template
+    participant ASG as Auto Scaling Group
+    participant EC2 as EC2 Instances
+
+    Note over EB,EC2: Weekly Automation Cycle (Every Tuesday 02:00 UTC)
+    
+    EB->>IB: Trigger Pipeline Execution
+    Note over IB: Build Process (30-45 minutes)
+    IB->>IB: Provision Build Instance
+    IB->>IB: Install OS Tooling Component
+    IB->>IB: Install Custom Scripts Component
+    IB->>IB: Run Automated Tests (60min timeout)
+    IB->>IB: Create AMI with timestamp name
+    IB->>PS: Update Parameter with new AMI ID
+    IB->>EBR: Emit "AVAILABLE" State Change Event
+    
+    Note over EBR,LF: Event-Driven Launch Template Update
+    EBR->>LF: Trigger Lambda Function
+    LF->>PS: Retrieve Latest AMI ID
+    LF->>LT: Create New Launch Template Version
+    LF->>LT: Set New Version as Default
+    
+    Note over ASG,EC2: Automatic Instance Updates
+    ASG->>LT: Reference $Latest Version
+    ASG->>EC2: New Instances Use Updated AMI
+    
+    Note over EB,EC2: Next cycle in 7 days
+```
+
 #### **State Change Event Processing**
-The EventBridge rule captures specific Image Builder events:
+```hcl
+resource "aws_cloudwatch_event_rule" "imagebuilder_completed" {
+  name          = "${var.project}-imagebuilder-completed"
+  description   = "Trigger on successful Image Builder builds"
+  event_pattern = jsonencode({
+    source      = ["aws.imagebuilder"]
+    detail-type = ["EC2 Image Builder Image State Change"]
+    detail = {
+      state = {
+        status = ["AVAILABLE"]
+      }
+    }
+  })
+}
+```
+
+The EventBridge rule captures specific Image Builder events with this structure:
 
 ```json
 {
@@ -670,7 +1143,7 @@ The EventBridge rule captures specific Image Builder events:
     "outputResources": {
       "amis": [
         {
-          "region": "us-east-1",
+          "region": "eu-west-1",
           "image": "ami-xxxxxxxxx",
           "name": "project-name-2024-01-15T02-30-45-000Z"
         }
@@ -680,31 +1153,54 @@ The EventBridge rule captures specific Image Builder events:
 }
 ```
 
-**Event Attributes**:
-- **Source**: `aws.imagebuilder` identifies the service origin
+**Event Processing Logic**:
+- **Source Filter**: `aws.imagebuilder` identifies the service origin
 - **Detail Type**: Specific to Image Builder state changes
-- **Status Filter**: Only "AVAILABLE" status triggers downstream actions
-- **Output Resources**: Contains new AMI details for processing
+- **Status Filter**: Only "AVAILABLE" status triggers downstream actions (filters out BUILDING, TESTING, FAILED states)
+- **Output Resources**: Contains new AMI details including ID, name, and region
+- **Event Target**: Routes matching events directly to Lambda function for processing
 
 ### Lambda Automation Function
 
 #### **Function Architecture**
 ```python
 def handler(event, context):
-    # Extract AMI ID from EventBridge event
-    ami_id = extract_ami_from_event(event)
-    
-    # Retrieve current launch template configuration
-    current_config = get_launch_template_config()
-    
-    # Create new version with updated AMI
-    new_version = create_launch_template_version(ami_id, current_config)
-    
-    # Set as default version for ASG
-    update_default_version(new_version)
-    
-    return {"statusCode": 200, "message": "Launch template updated successfully"}
+    # Get latest AMI from SSM Parameter Store
+    response = ssm.get_parameter(Name=PARAM_NAME)
+    ami_id = response["Parameter"]["Value"]
+
+    # Create new launch template version with updated AMI
+    ec2.create_launch_template_version(
+        LaunchTemplateId=LT_ID,
+        SourceVersion="$Default",
+        LaunchTemplateData={
+            "ImageId": ami_id,
+            "InstanceType": INSTANCE_TYPE,
+            "SecurityGroupIds": [SECURITY_GROUP_ID],
+            "IamInstanceProfile": {"Name": IAM_INSTANCE_PROFILE}
+        }
+    )
+
+    # Get the latest version number and set as default
+    latest = ec2.describe_launch_template_versions(
+        LaunchTemplateId=LT_ID,
+        Versions=["$Latest"]
+    )["LaunchTemplateVersions"][0]["VersionNumber"]
+
+    ec2.modify_launch_template(
+        LaunchTemplateId=LT_ID,
+        DefaultVersion=str(latest)
+    )
+
+    return {"statusCode": 200, "ami_id": ami_id}
 ```
+
+#### **Automation Execution Steps**
+1. **Parameter Retrieval**: Function reads latest AMI ID from `/imagebuilder/{project}/custom_id`
+2. **Version Creation**: Creates new launch template version with updated AMI while preserving all other configuration
+3. **Version Management**: Retrieves the newly created version number using `$Latest` reference
+4. **Default Update**: Sets the new version as default for immediate use by Auto Scaling Group
+5. **Response Logging**: Returns success status with AMI ID for audit trail
 
 #### **Environment Configuration**
 The Lambda function uses environment variables for flexible configuration:
@@ -833,9 +1329,122 @@ image_tests_configuration {
 - **Rollback Capability**: Previous AMI versions remain available
 
 #### **Monitoring and Observability**
-- **CloudWatch Integration**: All services provide detailed metrics and logs
+- **CloudWatch Integration**: All services provide metrics and logs in CloudWatch
 - **EventBridge Metrics**: Track event processing success rates
 - **Lambda Metrics**: Monitor function execution and error rates
 - **Image Builder Logs**: Detailed build process logging for troubleshooting
 
 This event-driven architecture provides a robust, scalable foundation for automated infrastructure management while maintaining security, reliability, and operational excellence.
+
+## Customization Options
+
+This section provides comprehensive guidance on customizing the autoscaling with Image Builder infrastructure to meet your specific requirements. The architecture is designed to be flexible and extensible while maintaining security and operational best practices.
+
+### Variable Configuration
+
+#### **Core Project Variables**
+The `terraform.tfvars` file provides the primary customization interface:
+
+```hcl
+# terraform.tfvars - Basic Configuration
+region       = "eu-west-1"           # Change to your preferred AWS region
+project      = "MyCustomProject"     # Unique project identifier (alphanumeric + hyphens)
+instance_type = "t4g.medium"         # Adjust based on workload requirements
+
+# Advanced Configuration
+build_instance_types = ["t4g.medium", "t4g.large"]  # Image Builder instance types
+default_tags = {
+  Owner       = "TeamName"
+  Project     = "MyCustomProject"
+  Environment = "Production"         # Development, Staging, Production
+  CostCenter  = "Engineering"
+}
+```
+
+
+**Build Instance Types:**
+- Use multiple instance types for Image Builder flexibility
+- Larger instances reduce build time but increase costs
+- Consider `c6g` family for CPU-intensive build processes
+
+
+### Monitoring and Debugging
+
+#### **CloudWatch Logs**
+
+**Useful Log Groups to Monitor:**
+- `/aws/imagebuilder/instance` - Image Builder build logs
+- `/aws/lambda/ltupdater` - Lambda function execution logs
+- `/aws/events/rule/imagebuilder-completed` - EventBridge rule logs
+
+## Additional Resources
+
+### AWS Documentation
+- **[EC2 Image Builder User Guide](https://docs.aws.amazon.com/imagebuilder/latest/userguide/)**
+- **[Auto Scaling User Guide](https://docs.aws.amazon.com/autoscaling/ec2/userguide/)**
+- **[EventBridge User Guide](https://docs.aws.amazon.com/eventbridge/latest/userguide/)**
+- **[Lambda Developer Guide](https://docs.aws.amazon.com/lambda/latest/dg/)**
+- **[Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html)**
+
+### Best Practices Guides
+- **[AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/)**
+- **[AWS Security Best Practices](https://aws.amazon.com/architecture/security-identity-compliance/)**
+- **[Cost Optimization Pillar](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/welcome.html)**
+- **[Operational Excellence Pillar](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/welcome.html)**
+
+### Terraform Resources
+- **[Terraform AWS Provider Documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)**
+- **[Terraform Best Practices](https://www.terraform.io/docs/cloud/guides/recommended-practices/index.html)**
+- **[AWS VPC Module](https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws/latest)**
+
+### Tools and Utilities
+- **[AWS CLI Reference](https://docs.aws.amazon.com/cli/latest/reference/)**
+- **[Terraform CLI Documentation](https://www.terraform.io/docs/cli/index.html)**
+- **[AWS CloudFormation Template Reference](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-reference.html)**
+
+---
+
+## Summary
+
+This comprehensive README provides everything needed to understand, deploy, customize, and operate the autoscaling with Image Builder infrastructure pattern. The architecture demonstrates modern AWS best practices for automated infrastructure management while maintaining security, cost efficiency, and operational excellence.
+
+### Key Takeaways
+
+- **Event-Driven Architecture**: Fully automated AMI lifecycle management through AWS native services
+- **Zero-Touch Operations**: No manual intervention required for AMI updates and deployments
+- **Extensible Design**: Modular architecture supports advanced patterns and enterprise requirements
+- **Cost Optimized**: Graviton instances, efficient scheduling, and resource right-sizing
+
+### Getting Started Checklist
+
+- [ ] Review [Prerequisites](#prerequisites) and ensure all requirements are met
+- [ ] Configure [terraform.tfvars](#step-2-configure-variables) with your specific settings
+- [ ] Follow [Deployment Instructions](#deployment-instructions) step by step
+- [ ] Verify deployment using the [validation commands](#step-6-verify-deployment)
+- [ ] Monitor first Image Builder execution and Lambda automation
+- [ ] Customize the infrastructure using [Customization Options](#customization-options)
+- [ ] Implement [Best Practices](#best-practices) for production deployment
+
+### Next Steps After Deployment
+
+Once you have successfully deployed this infrastructure, consider these next steps:
+
+1. **Monitor Your First Build**: Watch the Image Builder pipeline execute its first scheduled build
+2. **Test Scaling**: Manually adjust Auto Scaling Group capacity to observe the automation
+3. **Customize Components**: Modify the Image Builder components for your specific requirements
+4. **Implement Monitoring**: Set up CloudWatch dashboards and alerts for production use
+5. **Cost Optimization**: Monitor AWS costs and explore methods for reducing where possible
+
+### Contributing
+
+This project serves as an educational resource. If you find improvements or have suggestions:
+- Review the architecture patterns and suggest enhancements
+- Share your customizations and use cases
+- Report issues or unclear documentation
+- Contribute additional examples or extensions
+
+### Further Reading 
+
+- **Troubleshooting**: Check the [Troubleshooting](#troubleshooting) section for common issues
+- **Learning**: Explore [Additional Resources](#additional-resources) for deeper AWS knowledge
+- **Architecture**: Review [AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/) principles
