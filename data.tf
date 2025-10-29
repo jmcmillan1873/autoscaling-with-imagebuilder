@@ -149,14 +149,3 @@ data "aws_iam_policy_document" "imagebuilder_permissions" {
 
 }
 
-# Create a machine image to see parameter store with. 
-# This is an example of how to get the latest AMI ID for Amazon Linux 2023 ARM64 - for use with Graviton based instances. 
-# This matches the architecture types we've stipulated in variables.tf for the images we're building. 
-data "aws_ami" "al2023" {
-  owners      = ["amazon"]
-  most_recent = true
-  filter {
-    name   = "name"
-    values = ["al2023-ami-*-arm64"]
-  }
-}
