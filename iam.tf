@@ -33,3 +33,29 @@ resource "aws_iam_instance_profile" "imagebuilder" {
   name = "${var.project}-Imagebuilder"
   role = aws_iam_role.imagebuilder_role.name
 }
+
+
+# Role for lifecycle managing IB Images - Lambda function
+resource "aws_iam_role" "ami_retention_lambda" {
+  name               = "AMI-retention-lambda-role"
+  description        = "Lambda Function to handle lifecycle of AMI's created by Image Builder."
+  assume_role_policy = data.aws_iam_policy_document.assume_lambda.json
+}
+
+# Policy for the Lambda function managing IB produced images 
+resource "aws_iam_policy" "ami_cleaner_policy" {
+  name   = "fujitsu-ami-cleaner-policy"
+  policy = data.aws_iam_policy_document.lambda_amicleaner_policy.json
+}
+
+# Attach ami cleaner policy to role
+resource "aws_iam_role_policy_attachment" "amicleaner-attach" {
+  role       = aws_iam_role.ami_retention_lambda.name
+  policy_arn = aws_iam_policy.ami_cleaner_policy.arn
+}
+
+# Attach vpc policy to role
+resource "aws_iam_role_policy_attachment" "attach_vpc-amicleaner" {
+  role       = aws_iam_role.ami_retention_lambda.name
+  policy_arn = data.aws_iam_policy.lambdavpc.arn
+}

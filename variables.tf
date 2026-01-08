@@ -1,3 +1,9 @@
+variable "ami_retain_count" {
+  description = "Number of ImageBuilder AMI's to retain"
+  type        = number
+  default     = 5
+}
+
 variable "region" {
   type    = string
   default = "eu-west-1"

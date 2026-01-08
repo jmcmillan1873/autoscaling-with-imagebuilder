@@ -60,3 +60,40 @@ resource "aws_lambda_permission" "allow_eventbridge" {
   source_arn    = aws_cloudwatch_event_rule.imagebuilder_completed.arn
 }
 
+
+#######################################################################
+# Lambda function for performing lifecycle management of the old AMIs #
+#######################################################################
+
+resource "aws_lambda_function" "ami_retention" {
+  function_name    = "${var.project}-ami-retention"
+  role             = aws_iam_role.ami_retention_lambda.arn
+  handler          = "amicleaner_lambda_function.lambda_handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.amicleaner.output_path
+  timeout          = 300
+  source_code_hash = data.archive_file.amicleaner.output_base64sha256
+
+  environment {
+    variables = {
+      RETAIN_COUNT       = tostring(var.ami_retain_count)
+      PROJECT_TAG_VALUE  = var.project
+      MANAGED_BY_VALUE   = "AWSImageBuilder"
+      DRY_RUN            = "true" # flip to false when confident
+      LAUNCH_TEMPLATE_ID = aws_launch_template.custom_lt.id
+    }
+  }
+
+  vpc_config {
+    subnet_ids         = module.vpc.private_subnets
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_amicleaner" {
+  statement_id  = "AllowExecutionFromEventBridgeAmicleanerSchedule"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ami_retention.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.amicleaner_schedule.arn
+}

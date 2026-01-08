@@ -149,14 +149,43 @@ data "aws_iam_policy_document" "imagebuilder_permissions" {
 
 }
 
-# Create a machine image to see parameter store with. 
-# This is an example of how to get the latest AMI ID for Amazon Linux 2023 ARM64 - for use with Graviton based instances. 
-# This matches the architecture types we've stipulated in variables.tf for the images we're building. 
-data "aws_ami" "al2023" {
-  owners      = ["amazon"]
-  most_recent = true
-  filter {
-    name   = "name"
-    values = ["al2023-ami-*-arm64"]
+
+########################################################################################################
+# Define Permissions policy for lambda function that deletes old AMIs and snapshots after ImageBuilder #
+########################################################################################################
+data "aws_iam_policy_document" "lambda_amicleaner_policy" {
+
+  statement {
+    sid = "DescribeEC2Artifacts"
+    actions = [
+      "ec2:DescribeImages",
+      "ec2:DescribeSnapshots",
+      "ec2:DescribeLaunchTemplates",
+      "ec2:DescribeLaunchTemplateVersions"
+    ]
+    effect = "Allow"
+
+    resources = ["*"]
   }
+
+  statement {
+    sid = "DeleteOldAMIsAndSnapshots"
+    actions = [
+      "ec2:DeregisterImage",
+      "ec2:DeleteSnapshot"
+    ]
+    effect = "Allow"
+
+    resources = ["*"]
+  }
+
+}
+
+#######################################################
+# Create a zip file for the IBTagging lambda function #
+#######################################################
+data "archive_file" "amicleaner" {
+  type        = "zip"
+  source_file = "${path.module}/files/amicleaner_lambda_function.py"
+  output_path = "${path.module}/files/amicleaner_lambda.zip"
 }
