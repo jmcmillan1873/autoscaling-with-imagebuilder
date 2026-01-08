@@ -21,7 +21,7 @@ resource "aws_imagebuilder_component" "os_tooling" {
 # Create the recipe for the custom image using the components listed abouve
 resource "aws_imagebuilder_image_recipe" "custom_recipe" {
   name         = "al2023-custom-recipe"
-  version      = "1.0.4"
+  version      = "1.0.0"
   parent_image = data.aws_ssm_parameter.al2023.value
 
   component { component_arn = aws_imagebuilder_component.os_tooling.arn }
@@ -40,6 +40,10 @@ resource "aws_imagebuilder_image_recipe" "custom_recipe" {
   lifecycle {
     create_before_destroy = true
   }
+
+  tags = {
+    ManagedBy = "AWSImageBuilder"
+  }
 }
 
 # Define the VPC/Infra used to build the image in
@@ -52,7 +56,8 @@ resource "aws_imagebuilder_infrastructure_configuration" "infra" {
   terminate_instance_on_failure = true
 
   tags = {
-    Name = "al2023-custom-imagebuilding"
+    Name      = "al2023-custom-imagebuilding"
+    ManagedBy = "AWSImageBuilder"
   }
 }
 
@@ -71,9 +76,11 @@ resource "aws_imagebuilder_distribution_configuration" "dist" {
       description = "Custom pre-baked AL2023 image"
 
       ami_tags = {
-        OS       = "AmazonLinux2023"
-        Hardened = "true"
-        Name     = "${var.project}-{{imagebuilder:buildDate}}"
+        OS        = "AmazonLinux2023"
+        Hardened  = "true"
+        Name      = "${var.project}-{{imagebuilder:buildDate}}"
+        ManagedBy = "AWSImageBuilder"
+        Project   = var.project
       }
     }
 
@@ -81,6 +88,10 @@ resource "aws_imagebuilder_distribution_configuration" "dist" {
       parameter_name = aws_ssm_parameter.custom_built_custom_id.name
       ami_account_id = local.account_id
     }
+  }
+
+  tags = {
+    ManagedBy = "AWSImageBuilder"
   }
 }
 
@@ -103,6 +114,10 @@ resource "aws_imagebuilder_image_pipeline" "pipeline" {
   image_tests_configuration {
     image_tests_enabled = true
     timeout_minutes     = 60
+  }
+
+  tags = {
+    ManagedBy = "AWSImageBuilder"
   }
 }
 

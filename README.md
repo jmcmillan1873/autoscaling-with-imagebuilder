@@ -501,9 +501,10 @@ Create a `terraform.tfvars` file to customize your deployment:
 
 ```hcl
 # terraform.tfvars
-region       = "eu-west-1"  # Change to your preferred region
-project      = "MyAutoscalingProject"  # Customize project name
-instance_type = "t4g.small"  # Adjust instance size as needed
+region           = "eu-west-1"             # Change to your preferred region
+project          = "MyAutoscalingProject"  # Customize project name
+instance_type    = "t4g.small"             # Adjust instance size as needed
+ami_retain_count = 5                       # Number of AMIs to keep when housekeeping. 
 
 # Customize default tags
 default_tags = {
@@ -522,13 +523,16 @@ build_instance_types = ["t4g.small", "t4g.medium"]
 - Select the region you'd like to deploy to. 
 - Defaults to `eu-west-1`
 
-**Instance Type Selection:**
-- The lab uses the Graviton t4g family. Feel free to change this, but make correct the code to accomodate (hint - look for `arm64` and change that to your preferred architecture type)
-
 **Project Naming:**
 - Use alphanumeric characters and hyphens only
 - Keep under 20 characters for resource name limits
 - Choose descriptive names for easy identification
+
+**Instance Type Selection:**
+- The lab uses the Graviton t4g family. Feel free to change this, but make correct the code to accommodate (hint - look for `arm64` and change that to your preferred architecture type)
+
+**Retain AMIs / Housekeeping**
+- The `amicleaner` Lambda function deletes old AMIs and Snapshots, it will preserve as many images as is configured by `ami_retain_count`.
 
 ### Step 3: Initialize Terraform
 
@@ -746,6 +750,7 @@ This section provides detailed documentation of each Terraform file, explaining 
 - **`instance_type`**: EC2 instance type for Auto Scaling Group (default: t4g.small)
 - **`build_instance_types`**: Array of instance types for Image Builder (Graviton-based)
 - **`default_tags`**: Standard tags applied to all resources
+- **`ami_retain_count`**: The number of ImageBuilder produced AMI's to retain (Look at the `amicleaner` Lambda function to see selection criteria.)
 
 **Configuration Notes**:
 - Graviton-based instance types (t4g family) for cost optimization and performance
@@ -908,25 +913,39 @@ This section provides detailed documentation of each Terraform file, explaining 
 **Purpose**: Serverless automation for updating launch templates with new AMI IDs
 
 **Key Resources**:
-- **`aws_iam_role.lambda-ltupdater`**: Lambda execution role with required permissions
+- **`aws_iam_role.lambda-ltupdater`**: Lambda execution role with required permissions for the launch template updater function. 
 - **`aws_iam_policy.ltupdater-lambda_policy`**: Custom policy for EC2 and SSM access
 - **`aws_lambda_function.update_launch_template`**: Python function for launch template updates
 - **`aws_lambda_permission.allow_eventbridge`**: Allows EventBridge to invoke the function
+- **`aws_lambda_function.ami_retention`**: Python function for housekeeping AMI Images produced by Image Builder
+- **`aws_lambda_permission.allow_eventbridge_amicleaner`**: Allows EventBridge to invoke the function
 
-**Function Configuration**:
+**Function Configuration - ltupdater**:
 - **Runtime**: Python 3.12 for optimal performance and security
 - **Timeout**: 60 seconds for reliable completion
 - **VPC Integration**: Runs in private subnets with security group restrictions
 - **Environment Variables**: Configurable parameters for launch template and instance settings
 
-**Automation Logic**:
+**Automation Logic - ltupdater**:
+1. Retrieves latest AMI ID from Systems Manager Parameter Store
+2. Creates new launch template version with updated AMI
+3. Sets new version as default for Auto Scaling Group
+4. Provides detailed logging for troubleshooting
+
+**Function Configuration - amicleaner**:
+- **Runtime**: Python 3.12 for optimal performance and security
+- **Timeout**: 300 seconds for reliable completion
+- **VPC Integration**: Runs in private subnets with security group restrictions
+- **Environment Variables**: Configurable parameters for launch template, "dry-run" mode, and number of AMIs (and Snapshots) to keep 
+
+**Automation Logic - amicleaner**:
 1. Retrieves latest AMI ID from Systems Manager Parameter Store
 2. Creates new launch template version with updated AMI
 3. Sets new version as default for Auto Scaling Group
 4. Provides detailed logging for troubleshooting
 
 **Configuration Notes**:
-- VPC deployment enables secure access to private AWS APIs
+- VPC deployment enables secure access to private AWS APIs and access to VPC flow logs related to the lambda functions - meaning GuardDuty has better insight. 
 - Environment variables allow flexible configuration without code changes
 - IAM policies follow least-privilege principles with specific resource access
 

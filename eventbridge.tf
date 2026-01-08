@@ -21,3 +21,16 @@ resource "aws_cloudwatch_event_target" "trigger_lambda" {
   target_id = "LaunchTemplateUpdater"
   arn       = aws_lambda_function.update_launch_template.arn
 }
+
+## Create Event Bridge Cron schedule and target to trigger AMI cleaner Lambda ##
+resource "aws_cloudwatch_event_rule" "amicleaner_schedule" {
+  name                = "${var.project}-amicleaner-schedule"
+  description         = "Trigger AMI Cleaner Lambda on a schedule"
+  schedule_expression = "cron(0 5 ? * * *)" # Daily at 05:00 UTC
+}
+
+resource "aws_cloudwatch_event_target" "trigger_amicleaner" {
+  rule      = aws_cloudwatch_event_rule.amicleaner_schedule.name
+  target_id = "AMICleaner"
+  arn       = aws_lambda_function.ami_retention.arn
+}

@@ -149,3 +149,43 @@ data "aws_iam_policy_document" "imagebuilder_permissions" {
 
 }
 
+
+########################################################################################################
+# Define Permissions policy for lambda function that deletes old AMIs and snapshots after ImageBuilder #
+########################################################################################################
+data "aws_iam_policy_document" "lambda_amicleaner_policy" {
+
+  statement {
+    sid = "DescribeEC2Artifacts"
+    actions = [
+      "ec2:DescribeImages",
+      "ec2:DescribeSnapshots",
+      "ec2:DescribeLaunchTemplates",
+      "ec2:DescribeLaunchTemplateVersions"
+    ]
+    effect = "Allow"
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "DeleteOldAMIsAndSnapshots"
+    actions = [
+      "ec2:DeregisterImage",
+      "ec2:DeleteSnapshot"
+    ]
+    effect = "Allow"
+
+    resources = ["*"]
+  }
+
+}
+
+#######################################################
+# Create a zip file for the IBTagging lambda function #
+#######################################################
+data "archive_file" "amicleaner" {
+  type        = "zip"
+  source_file = "${path.module}/files/amicleaner_lambda_function.py"
+  output_path = "${path.module}/files/amicleaner_lambda.zip"
+}
