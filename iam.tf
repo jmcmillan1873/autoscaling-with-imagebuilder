@@ -135,7 +135,7 @@ resource "aws_iam_role" "ami_retention_lambda" {
 # Custom IAM Policy for AMI Cleaner Lambda
 # Defines specific permissions needed for AMI and snapshot lifecycle management
 resource "aws_iam_policy" "ami_cleaner_policy" {
-  name = "fujitsu-ami-cleaner-policy"
+  name = "ami-cleaner-policy"
   
   # Policy document defined in data.tf containing permissions for:
   # - ec2:DescribeImages (query AMIs by tags)
