@@ -1,0 +1,341 @@
+################################################################################
+# Example Terraform Variables Configuration
+################################################################################
+# This file provides example configurations for all variables in the
+# autoscaling with Image Builder project. Copy this file to terraform.tfvars
+# and customize the values for your specific deployment.
+#
+# Usage:
+#   cp terraform.tfvars.example terraform.tfvars
+#   # Edit terraform.tfvars with your settings
+#   terraform plan
+#   terraform apply
+#
+# IMPORTANT: Never commit terraform.tfvars to version control if it contains
+# sensitive information. The .gitignore file excludes it by default.
+################################################################################
+
+################################################################################
+# AWS Region Configuration
+################################################################################
+# Specify the AWS region where you want to deploy resources.
+# Choose a region based on:
+# - Proximity to your users (latency)
+# - Compliance requirements (data residency)
+# - Service availability (all services must be supported)
+# - Cost considerations (pricing varies by region)
+#
+# Popular regions:
+# - us-east-1: US East (N. Virginia) - Often lowest cost, most services
+# - us-west-2: US West (Oregon) - Low latency for West Coast
+# - eu-west-1: Europe (Ireland) - GDPR compliant, European users
+# - ap-southeast-1: Asia Pacific (Singapore) - Asian users
+# - ap-southeast-2: Asia Pacific (Sydney) - Australian users
+################################################################################
+
+region = "eu-west-1"
+
+
+################################################################################
+# Project Naming
+################################################################################
+# Unique identifier for your project. This value is used as a prefix for
+# resource names and appears in resource tags for cost allocation and
+# organization.
+#
+# Naming Guidelines:
+# - Use alphanumeric characters and hyphens only
+# - Maximum 20 characters (AWS resource name limits)
+# - Choose something descriptive and unique within your AWS account
+# - Avoid special characters, spaces, or underscores
+#
+# Examples:
+# - "ImageBuilderDemo"
+# - "DevEnvironment"
+# - "ProdAutoscale"
+# - "Security-Scanner"
+################################################################################
+
+project = "MyExampleProject"
+
+
+################################################################################
+# EC2 Instance Configuration
+################################################################################
+# Instance type for EC2 instances launched by the Auto Scaling Group.
+# This affects performance and cost of your running instances.
+#
+# Graviton (ARM64) Instance Types:
+# - t4g.nano:    2 vCPU,  0.5 GB RAM (~$3/month)  - Minimal workloads
+# - t4g.micro:   2 vCPU,  1 GB RAM   (~$6/month)  - Very light workloads
+# - t4g.small:   2 vCPU,  2 GB RAM   (~$12/month) - Light workloads, testing
+# - t4g.medium:  2 vCPU,  4 GB RAM   (~$24/month) - Moderate workloads
+# - t4g.large:   2 vCPU,  8 GB RAM   (~$48/month) - Heavier workloads
+# - t4g.xlarge:  4 vCPU,  16 GB RAM  (~$96/month) - Production workloads
+# - t4g.2xlarge: 8 vCPU,  32 GB RAM  (~$192/month) - Large workloads
+#
+# x86 Instance Types (if changing from ARM64):
+# - t3.micro:    2 vCPU,  1 GB RAM
+# - t3.small:    2 vCPU,  2 GB RAM
+# - t3.medium:   2 vCPU,  4 GB RAM
+# - t3.large:    2 vCPU,  8 GB RAM
+#
+# IMPORTANT: If changing to x86 instances, you must also update:
+# 1. AMI architecture in data.tf: change "arm64" to "x86_64"
+# 2. Image Builder base image parameter
+# 3. Build instance types (below)
+################################################################################
+
+instance_type = "t4g.small"
+
+
+################################################################################
+# Image Builder Configuration
+################################################################################
+# Instance types for EC2 Image Builder to use during AMI creation.
+# Larger instances reduce build time but increase costs per build.
+#
+# Build Performance Comparison (approximate):
+# - t4g.small:   30-45 minutes (~$0.01-0.02 per build)
+# - t4g.medium:  20-30 minutes (~$0.02-0.03 per build)
+# - t4g.large:   15-25 minutes (~$0.03-0.04 per build)
+# - t4g.xlarge:  10-20 minutes (~$0.04-0.06 per build)
+#
+# Recommendations:
+# - Development/Testing: ["t4g.small"] - Cost-effective, builds are infrequent
+# - Production: ["t4g.medium", "t4g.large"] - Faster builds, multiple options
+# - CI/CD Pipelines: ["t4g.large", "t4g.xlarge"] - Speed matters
+#
+# Multiple instance types provide flexibility - Image Builder selects based
+# on availability and capacity. List instance types in priority order.
+#
+# For CPU-intensive builds (compiling software), consider compute-optimized:
+# - c6g.medium, c6g.large, c6g.xlarge (Graviton)
+# - c5.medium, c5.large, c5.xlarge (x86)
+################################################################################
+
+build_instance_types = ["t4g.small", "t4g.medium", "t4g.large", "t4g.2xlarge"]
+
+
+################################################################################
+# AMI Retention Configuration
+################################################################################
+# Number of Image Builder-created AMIs to retain before deletion.
+# The AMI cleaner Lambda function preserves the newest N AMIs and deletes
+# older ones (along with their EBS snapshots) to prevent accumulation and
+# reduce storage costs.
+#
+# Considerations:
+# - Newer AMIs = More rollback options but higher storage costs
+# - Fewer AMIs = Lower costs but limited rollback capability
+# - AMIs referenced by active Launch Template versions are always protected
+#
+# Storage Cost Calculation:
+# Each AMI includes EBS snapshot(s):
+# - 20 GB snapshot ≈ $0.05/GB/month = $1.00/month per AMI
+# - 5 AMIs ≈ $5/month storage
+# - 10 AMIs ≈ $10/month storage
+# - 20 AMIs ≈ $20/month storage
+#
+# Recommendations:
+# - Development/Testing: 3-5 AMIs (cost savings, faster iteration)
+# - Staging: 5-10 AMIs (balance cost and rollback options)
+# - Production: 10-20 AMIs (regulatory compliance, extensive rollback)
+# - CI/CD: 5-7 AMIs (recent builds readily available)
+#
+# IMPORTANT: The amicleaner Lambda function defaults to DRY_RUN=true
+# Set DRY_RUN="false" in lambda.tf after verifying the deletion logic
+################################################################################
+
+ami_retain_count = 5
+
+
+################################################################################
+# Resource Tagging
+################################################################################
+# Standard tags applied to ALL AWS resources created by Terraform.
+# These tags enable:
+# - Cost allocation and tracking
+# - Ownership identification
+# - Environment segregation
+# - Automated operations (backup policies, compliance checks)
+# - Resource inventory and management
+#
+# Default tags are applied via the AWS provider configuration in main.tf,
+# ensuring every resource gets these tags without explicit configuration.
+#
+# Common Tag Keys (customize for your organization):
+# - Owner: Team, department, or individual responsible for resources
+# - Project: Project or application name (should match var.project)
+# - Environment: Deployment environment (Development, Staging, Production)
+# - CostCenter: Billing allocation (department code, project ID)
+# - Compliance: Compliance requirements (HIPAA, PCI-DSS, SOC2)
+# - Backup: Backup policy identifier
+# - ManagedBy: Automation tool (Terraform, CloudFormation, Manual)
+# - CreatedDate: Resource creation date (automatic via provider)
+# - ExpiryDate: Planned resource deletion date (for temporary resources)
+#
+# Tag Value Guidelines:
+# - Use consistent formats across your organization
+# - Avoid sensitive information in tags (tags are visible to IAM users)
+# - Use proper capitalization and spacing
+# - Keep values concise but descriptive
+################################################################################
+
+default_tags = {
+  # Owner Tag
+  # Identifies who is responsible for these resources
+  # Examples: "Platform Team", "Security Team", "john.doe@company.com"
+  Owner = "MeMyselfAndI"
+
+  # Project Tag
+  # Should match the project variable for consistency
+  # Used for cost allocation and resource grouping
+  Project = "MyExampleProject"
+
+  # Environment Tag
+  # Identifies the deployment environment
+  # Standard values: Development, Staging, QA, Production
+  Environment = "Development"
+
+  # Optional: Add additional tags as needed
+  # Uncomment and customize these examples:
+
+  # CostCenter = "Engineering"
+  # Department = "Infrastructure"
+  # Compliance = "None"
+  # BackupPolicy = "Daily"
+  # ManagedBy = "Terraform"
+  # Repository = "autoscaling-with-imagebuilder"
+  # Contact = "platform-team@company.com"
+  # BusinessUnit = "Technology"
+  # Application = "AutoScaling Infrastructure"
+  # DataClassification = "Internal"
+}
+
+
+################################################################################
+# Advanced Configuration Examples
+################################################################################
+# The following examples show advanced configurations. Uncomment and customize
+# as needed for your specific requirements.
+################################################################################
+
+# Example 1: Production Environment Configuration
+# ------------------------------------------------
+# Optimized for production workloads with higher capacity and redundancy
+#
+# region = "us-east-1"
+# project = "Production-App"
+# instance_type = "t4g.large"
+# build_instance_types = ["t4g.large", "t4g.xlarge", "c6g.large"]
+# ami_retain_count = 15
+# default_tags = {
+#   Owner = "Platform Team"
+#   Project = "Production-App"
+#   Environment = "Production"
+#   CostCenter = "Engineering"
+#   Compliance = "SOC2"
+#   BackupPolicy = "Daily"
+# }
+
+# Example 2: Development Environment Configuration
+# -------------------------------------------------
+# Cost-optimized for development and testing
+#
+# region = "us-west-2"
+# project = "Dev-Testing"
+# instance_type = "t4g.micro"
+# build_instance_types = ["t4g.micro", "t4g.small"]
+# ami_retain_count = 3
+# default_tags = {
+#   Owner = "Development Team"
+#   Project = "Dev-Testing"
+#   Environment = "Development"
+#   CostCenter = "Engineering"
+#   AutoShutdown = "Enabled"  # For cost optimization scripts
+# }
+
+# Example 3: Multi-Region Deployment Configuration
+# -------------------------------------------------
+# For disaster recovery or global deployments
+#
+# region = "eu-central-1"
+# project = "Global-App-EU"
+# instance_type = "t4g.medium"
+# build_instance_types = ["t4g.medium", "t4g.large"]
+# ami_retain_count = 10
+# default_tags = {
+#   Owner = "Infrastructure Team"
+#   Project = "Global-App"
+#   Environment = "Production"
+#   Region = "EU-Central"
+#   DataResidency = "EU"
+#   Compliance = "GDPR"
+# }
+
+# Example 4: Compliance-Focused Configuration
+# --------------------------------------------
+# Enhanced retention and tagging for regulatory compliance
+#
+# region = "us-gov-west-1"
+# project = "Compliance-App"
+# instance_type = "t4g.large"
+# build_instance_types = ["t4g.large", "t4g.xlarge"]
+# ami_retain_count = 30  # Extended retention for audit trails
+# default_tags = {
+#   Owner = "Compliance Team"
+#   Project = "Compliance-App"
+#   Environment = "Production"
+#   CostCenter = "Compliance"
+#   DataClassification = "Confidential"
+#   Compliance = "FedRAMP"
+#   RetentionPolicy = "7years"
+#   AuditRequired = "Yes"
+# }
+
+
+################################################################################
+# Notes and Best Practices
+################################################################################
+#
+# 1. VERSION CONTROL
+#    - This example file SHOULD be committed to version control
+#    - Your terraform.tfvars file should NOT be committed (contains real values)
+#    - The .gitignore file excludes terraform.tfvars by default
+#
+# 2. SECRETS MANAGEMENT
+#    - Never put sensitive data in this file or terraform.tfvars
+#    - Use AWS Secrets Manager or Parameter Store for secrets
+#    - Reference secrets via data sources in Terraform code
+#
+# 3. ENVIRONMENT-SPECIFIC CONFIGURATIONS
+#    - Create separate .tfvars files for each environment:
+#      * dev.tfvars
+#      * staging.tfvars
+#      * production.tfvars
+#    - Use: terraform plan -var-file=dev.tfvars
+#
+# 4. VALIDATION
+#    - Run terraform validate to check for errors
+#    - Run terraform plan to preview changes
+#    - Review the plan carefully before applying
+#
+# 5. COST MANAGEMENT
+#    - Estimate costs before deployment using AWS Pricing Calculator
+#    - Monitor costs in AWS Cost Explorer after deployment
+#    - Tag resources consistently for accurate cost allocation
+#    - Use smaller instance types for development environments
+#
+# 6. SECURITY
+#    - Follow principle of least privilege
+#    - Enable MFA for AWS accounts
+#    - Use separate AWS accounts for different environments
+#    - Regularly review IAM permissions and security groups
+#
+# 7. DOCUMENTATION
+#    - Document your specific configuration choices
+#    - Keep comments up to date when changing values
+#    - Share knowledge with your team about customizations
+#
+################################################################################

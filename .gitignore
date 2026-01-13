@@ -22,3 +22,6 @@ terraform.rc
 
 # Ignore Checkov pulling in external modules when it scans them:
 .external_modules
+
+# Documentation summary files
+.documentation-summary.md
