@@ -196,6 +196,54 @@ resource "aws_imagebuilder_distribution_configuration" "dist" {
       # Uses local.account_id for current account (from data.tf)
       ami_account_id = local.account_id
     }
+
+    ############################################################################
+    # Workaround Resource Inventory (for future removal if native approach works)
+    ############################################################################
+    # The following resources implement the Lambda/EventBridge workaround that
+    # creates fully-specified LT versions after each Image Builder build. If the
+    # native launch_template_configuration block below proves to preserve all LT
+    # settings, these resources can be safely removed.
+    #
+    # Workaround Resources:
+    #   Type                                Name                    File
+    #   ----                                ----                    ----
+    #   aws_iam_role                        lambda-ltupdater        iam.tf
+    #   aws_iam_policy                      ltupdater-lambda_policy iam.tf
+    #   aws_iam_role_policy_attachment      ltupdater-attach        iam.tf
+    #   aws_iam_role_policy_attachment      attach_vpc-ltupdater    iam.tf
+    #   aws_lambda_function                 update_launch_template  lambda.tf
+    #   aws_lambda_permission               allow_eventbridge       lambda.tf
+    #   aws_cloudwatch_event_rule           imagebuilder_completed  eventbridge.tf
+    #   aws_cloudwatch_event_target         trigger_lambda          eventbridge.tf
+    #   data.archive_file                   ltupdater               data.tf
+    #   (source file)                       ltupdater_lambda_function.py  files/
+    #
+    # Output referencing workaround resources:
+    #   ltupdater_lambda_arn  (outputs.tf) -> aws_lambda_function.update_launch_template.arn
+    #
+    # Cross-references (workaround -> non-workaround):
+    #   aws_lambda_function.update_launch_template depends on:
+    #     - aws_ssm_parameter.custom_built_custom_id  (env var, lambda.tf)
+    #     - aws_launch_template.custom_lt              (env var, lambda.tf)
+    #     - aws_security_group.MyExampleSG             (env var, lambda.tf)
+    #     - aws_iam_instance_profile.scanbox           (env var, lambda.tf)
+    #     - aws_security_group.lambda                  (vpc_config, lambda.tf)
+    #     - module.vpc.private_subnets                 (vpc_config, lambda.tf)
+    #
+    # No non-workaround resources depend on workaround resources (safe removal).
+    ############################################################################
+
+    # Native Launch Template version creation
+    # Instructs Image Builder to create a new LT version with the built AMI
+    # while preserving all existing LT settings (instance type, security groups,
+    # IAM instance profile, block device mappings, tag specifications).
+    # This runs alongside the Lambda/EventBridge workaround for side-by-side comparison.
+    launch_template_configuration {
+      launch_template_id = aws_launch_template.custom_lt.id
+      account_id         = local.account_id
+      default            = true
+    }
   }
 
   tags = {

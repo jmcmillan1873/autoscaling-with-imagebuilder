@@ -76,6 +76,16 @@ output "imagebuilder_components" {
   }
 }
 
+output "distribution_configuration_arn" {
+  description = "ARN of the Image Builder distribution configuration"
+  value       = aws_imagebuilder_distribution_configuration.dist.arn
+}
+
+output "eventbridge_rule_name" {
+  description = "Name of the EventBridge rule for Image Builder completion (for disabling during isolated testing)"
+  value       = aws_cloudwatch_event_rule.imagebuilder_completed.name
+}
+
 ################################################################################
 # Lambda Function Outputs
 ################################################################################

@@ -234,6 +234,8 @@ data "aws_iam_policy_document" "imagebuilder_permissions" {
     # - Describe*: Query EC2 resources (wildcard for all describe actions)
     # - DeleteSnapshot: Clean up snapshots from failed builds
     # - tag:GetResources: Query resources by tags
+    # - CreateLaunchTemplateVersion: Required for native launch_template_configuration block
+    # - ModifyLaunchTemplate: Required for set_default_version = true in native LT distribution
     actions = [
       "ec2:CreateImage",
       "ec2:RegisterImage",
@@ -243,6 +245,8 @@ data "aws_iam_policy_document" "imagebuilder_permissions" {
       "ec2:CreateTags",
       "ec2:Describe*",
       "ec2:DeleteSnapshot",
+      "ec2:CreateLaunchTemplateVersion",
+      "ec2:ModifyLaunchTemplate",
       "tag:GetResources"
     ]
     

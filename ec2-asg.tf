@@ -137,10 +137,16 @@ resource "aws_launch_template" "custom_lt" {
   }
   
   # Launch Template Lifecycle Management
-  # Note: No explicit lifecycle block is defined, meaning Terraform will
-  # replace the template if critical attributes (like name_prefix) change.
-  # The Lambda function creates new versions, which don't trigger Terraform changes.
-  
+  # Ignore changes to default_version because Image Builder creates new LT
+  # versions outside of Terraform via the native launch_template_configuration
+  # block and sets the default. Without this, terraform plan would show drift
+  # after every Image Builder pipeline run.
+  # Note: latest_version is a computed-only attribute (provider-decided) and
+  # does not need to be in ignore_changes.
+  lifecycle {
+    ignore_changes = [default_version]
+  }
+
   # Additional Launch Template features available but not configured:
   # - user_data: Bootstrap scripts run at instance launch
   # - metadata_options: IMDSv2 configuration for enhanced security
