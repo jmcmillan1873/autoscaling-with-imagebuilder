@@ -1,13 +1,8 @@
 ################################################################################
 # EventBridge Rules for Event-Driven Automation
 ################################################################################
-# This file defines EventBridge rules that orchestrate the automated AMI
-# lifecycle management workflow. EventBridge acts as the central nervous system,
-# connecting Image Builder, Lambda functions, and scheduled triggers.
-#
-# Rules Defined:
-# 1. imagebuilder_completed: Triggers when Image Builder finishes building AMI
-# 2. amicleaner_schedule: Daily schedule for AMI cleanup automation
+# This file defines the EventBridge schedule rule that triggers the AMI cleanup
+# Lambda function on a daily basis to control storage costs.
 #
 # Event-Driven Benefits:
 # - Loose coupling between services
@@ -15,74 +10,6 @@
 # - Complete audit trail in CloudWatch
 # - Scalable event processing
 ################################################################################
-
-################################################################################
-# Image Builder Completion Event Rule
-################################################################################
-# This rule monitors Image Builder state changes and triggers Lambda when
-# a new AMI becomes available, enabling automatic Launch Template updates.
-################################################################################
-
-# EventBridge Rule for Image Builder State Changes
-# Captures EC2 Image Builder events when AMI building completes successfully
-resource "aws_cloudwatch_event_rule" "imagebuilder_completed" {
-  # Rule name includes project identifier for easy identification
-  name = "${var.project}-imagebuilder-completed"
-  
-  # Description helps operators understand rule purpose in AWS Console
-  description = "Trigger on successful Image Builder builds"
-  
-  # Event Pattern: JSON filter for specific events
-  # This pattern matches events from Image Builder service when:
-  # 1. Source is "aws.imagebuilder" (EC2 Image Builder service)
-  # 2. Detail type is "EC2 Image Builder Image State Change"
-  # 3. State status is "AVAILABLE" (successful build completion)
-  #
-  # Event pattern filters out:
-  # - BUILDING state (in progress)
-  # - TESTING state (running tests)
-  # - FAILED state (build failures)
-  # - Other services' events
-  #
-  # Example matching event:
-  # {
-  #   "source": "aws.imagebuilder",
-  #   "detail-type": "EC2 Image Builder Image State Change",
-  #   "detail": {
-  #     "state": {"status": "AVAILABLE"},
-  #     "outputResources": {"amis": [{"image": "ami-xxx"}]}
-  #   }
-  # }
-  event_pattern = <<EOF
-{
-  "source": ["aws.imagebuilder"],
-  "detail-type": ["EC2 Image Builder Image State Change"],
-  "detail": {
-    "state": {
-      "status": ["AVAILABLE"]
-    }
-  }
-}
-EOF
-}
-
-# EventBridge Target: Route Events to Lambda Function
-# When the rule matches an event, invoke the Launch Template updater Lambda
-resource "aws_cloudwatch_event_target" "trigger_lambda" {
-  # Rule to attach this target to
-  rule = aws_cloudwatch_event_rule.imagebuilder_completed.name
-  
-  # Unique identifier for this target (one rule can have multiple targets)
-  target_id = "LaunchTemplateUpdater"
-  
-  # Lambda function ARN to invoke when event matches
-  # The Lambda permission resource (in lambda.tf) grants EventBridge invoke access
-  arn = aws_lambda_function.update_launch_template.arn
-  
-  # Note: EventBridge automatically retries failed invocations with exponential backoff
-  # Failed events can be sent to DLQ for debugging (add dead_letter_config if needed)
-}
-
 
 ################################################################################
 # AMI Cleaner Schedule Rule

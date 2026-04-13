@@ -81,19 +81,9 @@ output "distribution_configuration_arn" {
   value       = aws_imagebuilder_distribution_configuration.dist.arn
 }
 
-output "eventbridge_rule_name" {
-  description = "Name of the EventBridge rule for Image Builder completion (for disabling during isolated testing)"
-  value       = aws_cloudwatch_event_rule.imagebuilder_completed.name
-}
-
 ################################################################################
 # Lambda Function Outputs
 ################################################################################
-
-output "ltupdater_lambda_arn" {
-  description = "ARN of Launch Template updater Lambda function"
-  value       = aws_lambda_function.update_launch_template.arn
-}
 
 output "amicleaner_lambda_arn" {
   description = "ARN of AMI cleaner Lambda function"
@@ -180,9 +170,6 @@ output "useful_commands" {
     
     # Update Auto Scaling Group desired capacity
     aws autoscaling set-desired-capacity --auto-scaling-group-name ${aws_autoscaling_group.custom_asg.name} --desired-capacity 1 --region ${var.region}
-    
-    # View Lambda function logs (ltupdater)
-    aws logs tail /aws/lambda/${aws_lambda_function.update_launch_template.function_name} --follow --region ${var.region}
     
     # View Lambda function logs (amicleaner)
     aws logs tail /aws/lambda/${aws_lambda_function.ami_retention.function_name} --follow --region ${var.region}

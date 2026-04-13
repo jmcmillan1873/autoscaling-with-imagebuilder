@@ -85,57 +85,6 @@ data "aws_iam_policy_document" "assume_ec2" {
 # They are attached to Lambda execution roles as inline or managed policies.
 ################################################################################
 
-# Launch Template Updater Lambda Permissions
-# Grants permissions for updating Launch Templates and reading from Parameter Store
-data "aws_iam_policy_document" "lambda_ltupdater_policy" {
-
-  # CloudWatch Logs Permissions
-  # Required for Lambda function logging and troubleshooting
-  statement {
-    sid = "AllowLambdaCloudwatchLogging"
-    
-    # Actions needed for CloudWatch Logs integration:
-    # - CreateLogGroup: Create log group on first execution
-    # - CreateLogStream: Create log stream for each invocation
-    # - PutLogEvents: Write log messages to CloudWatch
-    actions = [
-      "logs:CreateLogGroup",
-      "logs:CreateLogStream",
-      "logs:PutLogEvents"
-    ]
-
-    # Resource "*" is AWS best practice for Lambda logging
-    # Logs are restricted by function name in the log group path
-    resources = ["*"]
-  }
-
-  # Systems Manager and EC2 Permissions
-  # Required for reading AMI ID and updating Launch Templates
-  statement {
-    sid = "GrantSSMAccess"
-    
-    # Required actions:
-    # - ssm:GetParameter: Read AMI ID from Parameter Store
-    # - ec2:DescribeLaunchTemplates: Query Launch Template details
-    # - ec2:DescribeLaunchTemplateVersions: Get version information
-    # - ec2:ModifyLaunchTemplate: Set default version
-    # - ec2:CreateLaunchTemplateVersion: Create new version with updated AMI
-    actions = [
-      "ssm:GetParameter",
-      "ec2:DescribeLaunchTemplates",
-      "ec2:DescribeLaunchTemplateVersions",
-      "ec2:ModifyLaunchTemplate",
-      "ec2:CreateLaunchTemplateVersion"
-    ]
-
-    # Resource "*" provides flexibility for multi-resource access
-    # In production, consider restricting to specific resource ARNs:
-    # - arn:aws:ssm:${var.region}:${local.account_id}:parameter/imagebuilder/*
-    # - arn:aws:ec2:${var.region}:${local.account_id}:launch-template/*
-    resources = ["*"]
-  }
-}
-
 # AMI Cleaner Lambda Permissions
 # Grants permissions for querying and deleting AMIs and snapshots
 data "aws_iam_policy_document" "lambda_amicleaner_policy" {
@@ -390,24 +339,6 @@ data "aws_ssm_parameter" "al2023" {
 # for Lambda function deployment. Terraform automatically detects source code
 # changes and recreates the ZIP files, triggering Lambda function updates.
 ################################################################################
-
-# Launch Template Updater Lambda Deployment Package
-# Creates ZIP archive from Python source file
-data "archive_file" "ltupdater" {
-  # Archive type - ZIP format required for Lambda
-  type = "zip"
-  
-  # Source Python file containing the Lambda function code
-  # Path is relative to the Terraform module root
-  source_file = "${path.module}/files/ltupdater_lambda_function.py"
-  
-  # Output path for the generated ZIP file
-  # This ZIP is uploaded to Lambda during terraform apply
-  output_path = "${path.module}/files/ltupdater_lambda.zip"
-  
-  # Note: output_base64sha256 attribute is used in lambda.tf to detect
-  # code changes and trigger Lambda function updates automatically
-}
 
 # AMI Cleaner Lambda Deployment Package
 # Creates ZIP archive from AMI cleanup Python source file

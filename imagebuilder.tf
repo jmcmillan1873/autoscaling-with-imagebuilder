@@ -198,40 +198,23 @@ resource "aws_imagebuilder_distribution_configuration" "dist" {
     }
 
     ############################################################################
-    # Workaround Resource Inventory (for future removal if native approach works)
+    # Workaround Resource Inventory (REMOVED)
     ############################################################################
-    # The following resources implement the Lambda/EventBridge workaround that
-    # creates fully-specified LT versions after each Image Builder build. If the
-    # native launch_template_configuration block below proves to preserve all LT
-    # settings, these resources can be safely removed.
+    # The Lambda/EventBridge workaround resources that previously created
+    # fully-specified LT versions after each Image Builder build have been
+    # removed. The native launch_template_configuration block below now
+    # handles Launch Template version creation directly during distribution.
     #
-    # Workaround Resources:
-    #   Type                                Name                    File
-    #   ----                                ----                    ----
-    #   aws_iam_role                        lambda-ltupdater        iam.tf
-    #   aws_iam_policy                      ltupdater-lambda_policy iam.tf
-    #   aws_iam_role_policy_attachment      ltupdater-attach        iam.tf
-    #   aws_iam_role_policy_attachment      attach_vpc-ltupdater    iam.tf
-    #   aws_lambda_function                 update_launch_template  lambda.tf
-    #   aws_lambda_permission               allow_eventbridge       lambda.tf
-    #   aws_cloudwatch_event_rule           imagebuilder_completed  eventbridge.tf
-    #   aws_cloudwatch_event_target         trigger_lambda          eventbridge.tf
-    #   data.archive_file                   ltupdater               data.tf
-    #   (source file)                       ltupdater_lambda_function.py  files/
-    #
-    # Output referencing workaround resources:
-    #   ltupdater_lambda_arn  (outputs.tf) -> aws_lambda_function.update_launch_template.arn
-    #
-    # Cross-references (workaround -> non-workaround):
-    #   aws_lambda_function.update_launch_template depends on:
-    #     - aws_ssm_parameter.custom_built_custom_id  (env var, lambda.tf)
-    #     - aws_launch_template.custom_lt              (env var, lambda.tf)
-    #     - aws_security_group.MyExampleSG             (env var, lambda.tf)
-    #     - aws_iam_instance_profile.scanbox           (env var, lambda.tf)
-    #     - aws_security_group.lambda                  (vpc_config, lambda.tf)
-    #     - module.vpc.private_subnets                 (vpc_config, lambda.tf)
-    #
-    # No non-workaround resources depend on workaround resources (safe removal).
+    # Removed resources (for historical reference):
+    #   aws_iam_role.lambda-ltupdater, aws_iam_policy.ltupdater-lambda_policy,
+    #   aws_iam_role_policy_attachment.ltupdater-attach,
+    #   aws_iam_role_policy_attachment.attach_vpc-ltupdater,
+    #   aws_lambda_function.update_launch_template,
+    #   aws_lambda_permission.allow_eventbridge,
+    #   aws_cloudwatch_event_rule.imagebuilder_completed,
+    #   aws_cloudwatch_event_target.trigger_lambda,
+    #   data.archive_file.ltupdater,
+    #   files/ltupdater_lambda_function.py
     ############################################################################
 
     # Native Launch Template version creation

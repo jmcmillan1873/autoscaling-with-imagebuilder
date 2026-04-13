@@ -122,7 +122,6 @@ resource "aws_security_group" "MyExampleSG" {
 # Lambda Security Group
 ################################################################################
 # This security group is attached to Lambda functions running in VPC:
-# - ltupdater: Launch Template updater function
 # - amicleaner: AMI cleanup function
 #
 # Purpose: Allow outbound HTTPS for AWS API calls only (no inbound access needed)
