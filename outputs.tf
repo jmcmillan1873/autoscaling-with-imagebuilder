@@ -116,7 +116,7 @@ output "ami_parameter_name" {
 output "current_ami_id" {
   description = "Current AMI ID stored in Parameter Store (may be outdated after builds)"
   value       = aws_ssm_parameter.custom_built_custom_id.value
-  sensitive   = false
+  sensitive   = true
 }
 
 ################################################################################
