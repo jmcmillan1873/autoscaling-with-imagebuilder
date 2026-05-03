@@ -11,8 +11,8 @@
 # - Multi-AZ deployment across private subnets
 # - Scalable design supporting demand-based or scheduled scaling
 #
-# The Launch Template is updated automatically by the ltupdater Lambda function
-# when new AMIs become available, ensuring instances always use the latest image.
+# The Launch Template is updated automatically by Image Builder's native
+# launch_template_configuration when new AMIs become available.
 ################################################################################
 
 ################################################################################
@@ -40,10 +40,11 @@ resource "aws_launch_template" "custom_lt" {
   # This reference is evaluated during Terraform apply, not during plan
   # When Image Builder creates a new AMI, it updates the SSM parameter,
   # but the Launch Template retains the AMI ID from initial creation.
-  # The ltupdater Lambda function handles creating new LT versions with updated AMIs.
+  # Image Builder's native launch_template_configuration handles creating
+  # new LT versions with updated AMIs during distribution.
   #
   # Initial deployment: Uses base Amazon Linux 2023 AMI
-  # After first Image Builder run: Parameter updates, Lambda creates new LT version
+  # After first Image Builder run: Parameter updates, native LT distribution creates new LT version
   # Subsequent scaling events: ASG uses "$Latest" version with updated AMI
   image_id = aws_ssm_parameter.custom_built_custom_id.value
   
@@ -137,10 +138,16 @@ resource "aws_launch_template" "custom_lt" {
   }
   
   # Launch Template Lifecycle Management
-  # Note: No explicit lifecycle block is defined, meaning Terraform will
-  # replace the template if critical attributes (like name_prefix) change.
-  # The Lambda function creates new versions, which don't trigger Terraform changes.
-  
+  # Ignore changes to default_version because Image Builder creates new LT
+  # versions outside of Terraform via the native launch_template_configuration
+  # block and sets the default. Without this, terraform plan would show drift
+  # after every Image Builder pipeline run.
+  # Note: latest_version is a computed-only attribute (provider-decided) and
+  # does not need to be in ignore_changes.
+  lifecycle {
+    ignore_changes = [default_version]
+  }
+
   # Additional Launch Template features available but not configured:
   # - user_data: Bootstrap scripts run at instance launch
   # - metadata_options: IMDSv2 configuration for enhanced security
@@ -282,12 +289,11 @@ resource "aws_autoscaling_group" "custom_asg" {
     #
     # Workflow:
     # 1. Image Builder creates new AMI → updates SSM parameter
-    # 2. EventBridge triggers ltupdater Lambda
-    # 3. Lambda creates new Launch Template version with updated AMI
-    # 4. Lambda sets new version as $Default
-    # 5. ASG configured with "$Latest" automatically uses new version
-    # 6. New scale-out events launch instances with updated AMI
-    # 7. Existing instances remain running (no disruption)
+    # 2. Image Builder's native LT distribution creates new Launch Template version
+    # 3. New version is set as default (set_default_version = true)
+    # 4. ASG configured with "$Latest" automatically uses new version
+    # 5. New scale-out events launch instances with updated AMI
+    # 6. Existing instances remain running (no disruption)
     #
     # Alternative version options:
     # - "$Default": Use the version marked as default (recommended)

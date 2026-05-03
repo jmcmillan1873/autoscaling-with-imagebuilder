@@ -76,14 +76,14 @@ output "imagebuilder_components" {
   }
 }
 
+output "distribution_configuration_arn" {
+  description = "ARN of the Image Builder distribution configuration"
+  value       = aws_imagebuilder_distribution_configuration.dist.arn
+}
+
 ################################################################################
 # Lambda Function Outputs
 ################################################################################
-
-output "ltupdater_lambda_arn" {
-  description = "ARN of Launch Template updater Lambda function"
-  value       = aws_lambda_function.update_launch_template.arn
-}
 
 output "amicleaner_lambda_arn" {
   description = "ARN of AMI cleaner Lambda function"
@@ -116,7 +116,7 @@ output "ami_parameter_name" {
 output "current_ami_id" {
   description = "Current AMI ID stored in Parameter Store (may be outdated after builds)"
   value       = aws_ssm_parameter.custom_built_custom_id.value
-  sensitive   = false
+  sensitive   = true
 }
 
 ################################################################################
@@ -170,9 +170,6 @@ output "useful_commands" {
     
     # Update Auto Scaling Group desired capacity
     aws autoscaling set-desired-capacity --auto-scaling-group-name ${aws_autoscaling_group.custom_asg.name} --desired-capacity 1 --region ${var.region}
-    
-    # View Lambda function logs (ltupdater)
-    aws logs tail /aws/lambda/${aws_lambda_function.update_launch_template.function_name} --follow --region ${var.region}
     
     # View Lambda function logs (amicleaner)
     aws logs tail /aws/lambda/${aws_lambda_function.ami_retention.function_name} --follow --region ${var.region}

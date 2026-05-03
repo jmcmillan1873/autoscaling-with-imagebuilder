@@ -196,6 +196,37 @@ resource "aws_imagebuilder_distribution_configuration" "dist" {
       # Uses local.account_id for current account (from data.tf)
       ami_account_id = local.account_id
     }
+
+    ############################################################################
+    # Workaround Resource Inventory (REMOVED)
+    ############################################################################
+    # The Lambda/EventBridge workaround resources that previously created
+    # fully-specified LT versions after each Image Builder build have been
+    # removed. The native launch_template_configuration block below now
+    # handles Launch Template version creation directly during distribution.
+    #
+    # Removed resources (for historical reference):
+    #   aws_iam_role.lambda-ltupdater, aws_iam_policy.ltupdater-lambda_policy,
+    #   aws_iam_role_policy_attachment.ltupdater-attach,
+    #   aws_iam_role_policy_attachment.attach_vpc-ltupdater,
+    #   aws_lambda_function.update_launch_template,
+    #   aws_lambda_permission.allow_eventbridge,
+    #   aws_cloudwatch_event_rule.imagebuilder_completed,
+    #   aws_cloudwatch_event_target.trigger_lambda,
+    #   data.archive_file.ltupdater,
+    #   files/ltupdater_lambda_function.py
+    ############################################################################
+
+    # Native Launch Template version creation
+    # Instructs Image Builder to create a new LT version with the built AMI
+    # while preserving all existing LT settings (instance type, security groups,
+    # IAM instance profile, block device mappings, tag specifications).
+    # This runs alongside the Lambda/EventBridge workaround for side-by-side comparison.
+    launch_template_configuration {
+      launch_template_id = aws_launch_template.custom_lt.id
+      account_id         = local.account_id
+      default            = true
+    }
   }
 
   tags = {
